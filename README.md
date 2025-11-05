@@ -46,9 +46,3 @@ It reads a .lol source file, identifies and classifies each token (such as keywo
 ## 📚 References
 - https://lokalise.com/blog/lolcode-tutorial-on-programming-language-for-cat-lovers/
 - https://www.w3schools.com/python/python_regex.asp
-
-
-## 👨‍💻 Author
-Developed by Nicole Phoebe Valentino
-LOLCODE and Lexemes by Eron Jay Matira & Krizshna Yvonne Samonte
-For CMSC 141 Project (Milestone 1)
