@@ -53,25 +53,30 @@ grammar_rules = {
 class ParserState:
     def __init__(self):
         self.stack = []
-
+    #pushes a new block onto the stack
     def enter_block(self, block_type):
         self.stack.append(block_type)
 
+    #checks if the top of the stack matches the expected block type
     def exit_block(self, block_type):
         if not self.stack or self.stack[-1] != block_type:
             return False
         self.stack.pop()
         return True
-
+    
+    #returns the most recently opened block (top of the stack), or None if the stack is empty
     def current_block(self):
         return self.stack[-1] if self.stack else None
 
+    #checks whether a specific block type is currently open
     def is_inside(self, block_type):
         return block_type in self.stack
 
+    #returns True if there are any blocks left open
     def has_unclosed_blocks(self):
         return bool(self.stack)
 
+    #returns a list of all currently open blocks
     def get_unclosed_blocks(self):
         return list(self.stack)
 
@@ -95,17 +100,20 @@ def match_pattern(tokens, pattern):
 #check syntax of a single line
 def check_line_syntax(tokens, state, line_num):
     if not tokens:
+        #blank lines are valid
         return True, None
 
     kind, value = tokens[0]
 
     #single-line rules
+    #checks if the first token type matches a grammar rule key
     if kind in grammar_rules and isinstance(grammar_rules[kind], list):
         for pattern in grammar_rules[kind]:
             if match_pattern(tokens, pattern):
                 return True, None
         return False, f"Line {line_num}: Invalid syntax → {' '.join(tok[1] for tok in tokens)}"
     
+    #if not, checks all grammar rules
     #full-line patterns
     for rule_key, patterns in grammar_rules.items():
         if isinstance(patterns, list):
@@ -113,7 +121,7 @@ def check_line_syntax(tokens, state, line_num):
                 if match_pattern(tokens, pattern):
                     return True, None
 
-
+    #handle the validation logic for blocks statements
     #block-based rules
     if kind in grammar_rules and isinstance(grammar_rules[kind], dict):
         action = grammar_rules[kind].get(value)
