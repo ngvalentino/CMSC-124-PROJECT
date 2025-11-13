@@ -175,7 +175,7 @@ def validate_file(filename):
     return errors
 
 #run the validator
-if __name__ == "__main__":
+def main():
     file = "test2.lol"
     errors = validate_file(file) #get the errors collected in the validation process
     if errors:  #print every error if they exist
@@ -184,3 +184,6 @@ if __name__ == "__main__":
             print(err)
     else:       #else, print all are correct
         print("All lines are syntactically correct!")
+
+############################33
+main()
