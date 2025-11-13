@@ -19,8 +19,8 @@ grammar_rules = {
     "TYPECAST": [["MAEK", "EXPR", "A", "TYPE_LITERAL"]],
     "COMPARISON_OPERATOR": [["COMPARISON_OPERATOR", "EXPR", "EXPR"]],
     "FUNCTION_CALL": [["FUNCTION_CALL", "IDENTIFIER", "YR", "EXPR", "FUNCTION_END"]],
-    "RETURN": [["CONTROL_FLOW", "EXPR"]],  #FOUND YR
-    "EXIT": [["CONTROL_FLOW"]],            #GTFO
+    "RETURN": [["CONTROL_FLOW", "EXPR"]],  
+    "EXIT": [["CONTROL_FLOW"]],            
 
     #for block-based constructs
     "CONTROL_FLOW": {
@@ -57,11 +57,12 @@ class ParserState:
     def enter_block(self, block_type):
         self.stack.append(block_type)
 
-    #checks if the top of the stack matches the expected block type
+    #checks if the top of the stack matches the expected block type (to use with closing)
     def exit_block(self, block_type):
-        if not self.stack or self.stack[-1] != block_type:
-            return False
-        self.stack.pop()
+        #if empty or top of stack doesn't match the expected block type
+        if not self.stack or self.stack[-1] != block_type: 
+            return False    #false, keep it there
+        self.stack.pop()    #else, remove the top of stack
         return True
     
     #returns the most recently opened block (top of the stack), or None if the stack is empty
@@ -124,12 +125,13 @@ def check_line_syntax(tokens, state, line_num):
     #handle the validation logic for blocks statements
     #block-based rules
     if kind in grammar_rules and isinstance(grammar_rules[kind], dict):
-        action = grammar_rules[kind].get(value)
-        if action == "start_conditional":
-            state.enter_block("O RLY")
-        elif action == "end_conditional":
-            if not state.exit_block("O RLY"):
-                return False, f"Line {line_num}: Unexpected OIC without O RLY"
+        action = grammar_rules[kind].get(value) #determine name of block type
+        if action == "start_conditional":       #if start of conditional block
+            state.enter_block("O RLY")          #push to the stack the equivalent keyword 
+        elif action == "end_conditional":       #if end of conditional
+            if not state.exit_block("O RLY"):   #if "O RLY" is not the most recent open block
+                return False, f"Line {line_num}: Unexpected OIC without O RLY" #error
+        #same with other start and end
         elif action == "start_function":
             state.enter_block("HOW IZ I")
         elif action == "end_function":
@@ -140,11 +142,11 @@ def check_line_syntax(tokens, state, line_num):
         elif action == "end_loop":
             if not state.exit_block("IM IN YR"):
                 return False, f"Line {line_num}: Unexpected IM OUTTA YR without IM IN YR"
-        elif action == "start_try":
+        elif action == "start_try":     #add try
             state.enter_block("PLZ")
         elif action == "catch_block":
-            if not state.is_inside("PLZ"):
-                return False, f"Line {line_num}: O NOES without PLZ"
+            if not state.is_inside("PLZ"): #if PLZ is not in block stack
+                return False, f"Line {line_num}: O NOES without PLZ" #error when catching without try
         elif action == "start_case":
             state.enter_block("OMG")
         elif action == "end_case":
@@ -175,10 +177,10 @@ def validate_file(filename):
 #run the validator
 if __name__ == "__main__":
     file = "test2.lol"
-    errors = validate_file(file)
-    if errors:
+    errors = validate_file(file) #get the errors collected in the validation process
+    if errors:  #print every error if they exist
         print("Syntax Errors Found:")
         for err in errors:
             print(err)
-    else:
+    else:       #else, print all are correct
         print("All lines are syntactically correct!")
