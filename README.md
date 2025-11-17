@@ -3,6 +3,10 @@
 - Matira, Eron Jay H.
 - Samonte, Krizshna Yvonne H.
 - Valentino, Nicole Phoebe G.
+<<<<<<< HEAD
+=======
+
+>>>>>>> cb93df6bd499c730dc5408e8bbe8fb66183c9e7c
 **Section:** ST-6L
 
 ## 📋 Overview
@@ -45,9 +49,12 @@ It reads a .lol source file, identifies and classifies each token (such as keywo
 ## 📚 References
 - https://lokalise.com/blog/lolcode-tutorial-on-programming-language-for-cat-lovers/
 - https://www.w3schools.com/python/python_regex.asp
+<<<<<<< HEAD
 
 
 ## 👨‍💻 Author
 Developed by Nicole Phoebe Valentino
 LOLCODE and Lexemes by Eron Jay Matira & Krizshna Yvonne Samonte
 For CMSC 141 Project (Milestone 1)
+=======
+>>>>>>> cb93df6bd499c730dc5408e8bbe8fb66183c9e7c
