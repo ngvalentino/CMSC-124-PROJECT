@@ -3,7 +3,7 @@ import re
 # Define token types with readable names
 token_specs = [
     # COMMENT
-    ("COMMENT", r"BTW.*"),                      # single-line
+    ("COMMENT", r"BTW*"),                      # single-line
     ("COMMENT_MULTI", r"OBTW[\s\S]*?TLDR"),     # multi-line
     
     # CODE DELIMITER
@@ -100,7 +100,7 @@ def tokenize(code):
         value = match.group()       # The actual text matched
         
         # Ignore comments and spaces
-        if kind in ["WHITESPACE", "NEWLINE", "COMMENT"]:
+        if kind in ["WHITESPACE", "NEWLINE", "COMMENT", "COMMENT_MULTI"]:
             continue
         
         # Store token type and value
