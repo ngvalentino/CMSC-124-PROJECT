@@ -1,6 +1,7 @@
 from lexer import tokenize
 from parser import Parser, ParserError
 from semantic_analyzer import analyze_semantics
+from tree_parser import TreeParser      # Tree building parser
 
 token_labels = {
     "CODE_DELIMITER": "Code Delimiter",
@@ -49,13 +50,25 @@ def main():
     print("\n=== SYNTAX ANALYSIS ===")
     try:
         parser = Parser(tokens)
-        parser.parse_program()  # This will raise ParserError if invalid
+        tree = parser.parse_program()   # This will raise ParserError if invalid
+        print(tree)  
         print("No syntax errors found. ✅")
     except ParserError as e:
         print("Syntax error:", e)
         print("\nSemantic analysis skipped due to syntax errors.")
         return
-
+    
+    # === PARSE TREE (using the NEW TreeParser) ===
+    print("\n=== PARSE TREE ===")
+    try:
+        # Re-run parsing with the tree builder
+        tp = TreeParser(tokens)
+        tree = tp.parse_program()
+        print(tree.pretty())
+    except ParserError as e:
+        print("Tree building error:", e)
+        return
+    
     # === SEMANTIC ANALYSIS ===
     print("\n=== SEMANTIC ANALYSIS ===")
     analyze_semantics(filename)

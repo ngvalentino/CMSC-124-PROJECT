@@ -245,7 +245,7 @@ class Parser:
             self.advance()
         
         # Arithmetic operation (SUM OF, DIFF OF, etc.)
-        elif token_type == "ARITHMETIC_OPERATOR":
+        elif token_type == "ARITHMETIC_OPERATOR" or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF"):
             self.parse_operation()
         
         # Comparison (BOTH SAEM, DIFFRINT)
@@ -297,11 +297,6 @@ class Parser:
             return
 
 
-
-
-
-
-
     def parse_smoosh(self):
         # <smoosh> ::= SMOOSH <expr> (AN <expr>)*
         self.expect("SMOOSH")
@@ -319,3 +314,4 @@ class Parser:
             self.advance()
         else:
             raise ParserError(f"Expected literal, got {token_type}")
+        
