@@ -51,7 +51,6 @@ def main():
     try:
         parser = Parser(tokens)
         tree = parser.parse_program()   # This will raise ParserError if invalid
-        print(tree)  
         print("No syntax errors found. ✅")
     except ParserError as e:
         print("Syntax error:", e)
