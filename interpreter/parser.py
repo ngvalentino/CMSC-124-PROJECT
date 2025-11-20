@@ -23,17 +23,19 @@ class Parser:
     # Helpers
     # -------------------------
     def current(self):
+        # Skip comments automatically
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0].startswith("COMMENT"):
+            self.pos += 1
         if self.pos < len(self.tokens):
-            # unpack only type and value
             t = self.tokens[self.pos]
-            return t[0], t[1]  # ignore line and column
-        return None, None
+            return t[0], t[1], t[2], t[3]  
+        return None, None, None, None
     
     def advance(self):
         self.pos += 1
     
     def match(self, ttype, value=None):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         if token_type is None:
             return False
         if token_type == ttype and (value is None or token_value == value):
@@ -69,7 +71,7 @@ class Parser:
     # -------------------------
     def parse_statement_list(self):
         while True:
-            token_type, token_value, = self.current()
+            token_type, *_ = self.current()
             if token_type in (None, "CODE_DELIMITER", "OIC", "IF U SAY SO", "IM OUTTA YR", "O NOES"):
                 break
             elif token_type == "VAR_LIST_DELIMITER":  # Skip WAZZUP/BUHBYE
@@ -148,7 +150,7 @@ class Parser:
         self.expect("OUTPUT_KEYWORD", "VISIBLE")
         
         # Optional expression list
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER") \
         or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT", "SMOOSH"):
             self.parse_expr_list() 
@@ -269,7 +271,7 @@ class Parser:
     # -------------------------
     def parse_expr_list(self):
         # <expr_list> ::= <expr> (YR <expr>)*
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         
         # Only parse if next token is a valid expression start
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER") \
@@ -334,7 +336,7 @@ class Parser:
             pass
 
         # second operand: check if there is a valid operand
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         if token_type in (
             "INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE",
             "IDENTIFIER", "ARITHMETIC_OPERATOR", "COMPARISON_OPERATOR", "SMOOSH"
@@ -357,7 +359,7 @@ class Parser:
     # Literals
     # -------------------------
     def parse_literal(self):
-        token_type, token_value = self.current()
+        token_type, *_ = self.current()
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE"):
             self.advance()
         else:
@@ -367,7 +369,7 @@ class Parser:
     # Helpers
     # -------------------------
     def check(self, ttype, value=None):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         return token_type == ttype and (value is None or token_value == value)
     
     def previous(self):
@@ -375,3 +377,23 @@ class Parser:
             t = self.tokens[self.pos - 1]
             return {"type": t[0], "value": t[1]}
         return None
+    
+# -------------------------
+# Validation helpers
+# -------------------------
+def validate_code(code: str):
+    try:
+        tokens = tokenize(code)
+        parser = Parser(tokens)
+        parser.parse_program()
+        return []  # no syntax errors
+    except ParserError as e:
+        return [f"Line {e.line}: {str(e)}"]
+
+def validate_file(filepath: str):
+    try:
+        with open(filepath, "r") as f:
+            code = f.read()
+        return validate_code(code)
+    except FileNotFoundError:
+        return [f"File not found: {filepath}"]

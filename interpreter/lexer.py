@@ -117,8 +117,8 @@ def tokenize(code):
         value = match.group()       # The actual text matched
         start = match.start()
         
-        # Ignore comments and spaces
-        if kind in ["WHITESPACE", "NEWLINE", "COMMENT", "COMMENT_MULTI"]:
+        # Ignore spaces
+        if kind in ["WHITESPACE", "NEWLINE"]:
             continue
         
         # Track newlines
@@ -132,3 +132,11 @@ def tokenize(code):
         tokens.append((kind, value, line_num, col_num))
         
     return tokens
+
+# -----------------------------
+# FILTER TOKENS
+# -----------------------------
+def filter_tokens(tokens):
+    # Remove comments from token list.
+    return [t for t in tokens if not t[0].startswith("COMMENT")]
+
