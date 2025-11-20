@@ -17,6 +17,7 @@ class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
+        self.errors = []  # Collect parsing errors
     
     # -------------------------
     # Helpers
@@ -41,9 +42,19 @@ class Parser:
         return False
     
     def expect(self, ttype, value=None):
-        if not self.match(ttype, value):
-            token_type, token_value = self.current()
-            raise ParserError(f"Expected {ttype} {value}, got {token_type} {token_value}")
+        token_type, token_value, line, col = self.current()  # include line info
+        if token_type != ttype or (value is not None and token_value != value):
+            # Record error with line info
+            self.errors.append(
+                f"[Line {line}] Expected {ttype} {value}, got {token_type} {token_value}"
+            )
+            # Attempt simple recovery: skip until a safe token
+            self.advance()
+            return {"type": token_type, "value": token_value, "line": line, "col": col}
+        
+        self.advance()
+        return {"type": token_type, "value": token_value, "line": line, "col": col}
+
 
     # -------------------------
     # Program Entry
@@ -58,7 +69,7 @@ class Parser:
     # -------------------------
     def parse_statement_list(self):
         while True:
-            token_type, token_value = self.current()
+            token_type, token_value, = self.current()
             if token_type in (None, "CODE_DELIMITER", "OIC", "IF U SAY SO", "IM OUTTA YR", "O NOES"):
                 break
             elif token_type == "VAR_LIST_DELIMITER":  # Skip WAZZUP/BUHBYE
@@ -68,54 +79,66 @@ class Parser:
 
     
     def parse_statement(self):
-        token_type, token_value = self.current()
-        
-        # <print>
-        if token_type == "OUTPUT_KEYWORD":
-            self.parse_print()
-        
-        # <declaration>
-        elif token_type == "VAR_DECLARATION":
-            self.parse_declaration()
+        token_type, token_value, line, col = self.current()
+        try:
+            # <print>
+            if token_type == "OUTPUT_KEYWORD":
+                self.parse_print()
             
-        # <identifier>
-        elif token_type == "IDENTIFIER":
-            self.parse_assignment()
+            # <declaration>
+            elif token_type == "VAR_DECLARATION":
+                self.parse_declaration()
+                
+            # <identifier>
+            elif token_type == "IDENTIFIER":
+                self.parse_assignment()
 
-        # <conditional>
-        elif token_type == "CONTROL_FLOW" and token_value == "O RLY?":
-            self.parse_conditional()
+            # <conditional>
+            elif token_type == "CONTROL_FLOW" and token_value == "O RLY?":
+                self.parse_conditional()
+                
+            # <loop>
+            elif token_type == "LOOPING" and token_value == "IM IN YR":
+                self.parse_loop()
+                
+            # <function_def>
+            elif token_type == "FUNCTION_DEF_CALL" and token_value == "HOW IZ I":
+                self.parse_function_def()
+                
+            # <function_call>
+            elif token_type == "FUNCTION_CALL" or (token_type == "I" and token_value == "IZ"):
+                self.parse_function_call()
+                
+            # <input>
+            elif token_type == "IO" and token_value == "GIMMEH":
+                return self.parse_input()
+                
+            # <return>
+            elif token_type == "RETURN" or (token_type == "FOUND" and token_value == "YR"):
+                self.parse_return()
+                
+            # <exit>
+            elif token_type == "EXIT" or (token_type == "GTFO"):
+                self.advance()  # just consume GTFO
             
-        # <loop>
-        elif token_type == "LOOPING" and token_value == "IM IN YR":
-            self.parse_loop()
-            
-        # <function_def>
-        elif token_type == "FUNCTION_DEF_CALL" and token_value == "HOW IZ I":
-            self.parse_function_def()
-            
-        # <function_call>
-        elif token_type == "FUNCTION_CALL" or (token_type == "I" and token_value == "IZ"):
-            self.parse_function_call()
-            
-        # <return>
-        elif token_type == "RETURN" or (token_type == "FOUND" and token_value == "YR"):
-            self.parse_return()
-            
-        # <exit>
-        elif token_type == "EXIT" or (token_type == "GTFO"):
-            self.advance()  # just consume GTFO
+            # <typecast>  
+            elif token_type == "TYPECAST" and token_value == "MAEK":
+                self.parse_typecast()
+                
+            # <exeception_handling>
+            elif token_type == "EXCEPTION" and token_value == "PLZ":
+                self.parse_exception_handling()
+                
+            else:
+                raise ParserError(f"Unknown statement starting with {token_type} {token_value}")
+                error_msg = f"[Line {line}] Unknown statement starting with {token_type} {token_value}"
+                self.errors.append(error_msg)
+                self.advance()  # skip the token and continue
         
-        # <typecast>  
-        elif token_type == "TYPECAST" and token_value == "MAEK":
-            self.parse_typecast()
-            
-        # <exeception_handling>
-        elif token_type == "EXCEPTION" and token_value == "PLZ":
-            self.parse_exception_handling()
-        else:
-            raise ParserError(f"Unknown statement starting with {token_type} {token_value}")
-
+        except ParserError as e:
+            # Collect parser errors instead of stopping
+            self.errors.append(f"[Line {line}] {str(e)}")
+            self.advance()              # Skip problematic token to continue
     # --------------------------
     # Specific Statement Parsers
     # --------------------------
@@ -123,7 +146,12 @@ class Parser:
     # <print> ::= VISIBLE <expr_list>
     def parse_print(self):
         self.expect("OUTPUT_KEYWORD", "VISIBLE")
-        self.parse_expr_list()  
+        
+        # Optional expression list
+        token_type, token_value = self.current()
+        if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER") \
+        or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT", "SMOOSH"):
+            self.parse_expr_list() 
             
     # <declaration> ::= I HAS A <varident> (ITZ <expr>)?
     def parse_declaration(self):
@@ -212,6 +240,14 @@ class Parser:
         while self.match("YR"):
             self.parse_expr()
         self.expect("FUNCTION_END")
+        
+    # <input> ::= GIMMEH <varident>
+    def parse_input(self):
+        self.expect("INPUT")
+        
+        self.expect("IO", "GIMMEH")
+        var_token = self.expect("IDENTIFIER")
+        self.expect(f"VAR({var_token['value']})")
     
     # <exception_handling> ::= PLZ <expr>? <linebreak> AWSUM THX <linebreak> <statement_list> (O NOES <linebreak> <statement_list>)? KTHX
     def parse_exception_handling(self):
@@ -233,36 +269,48 @@ class Parser:
     # -------------------------
     def parse_expr_list(self):
         # <expr_list> ::= <expr> (YR <expr>)*
-        self.parse_expr()
-        while self.match("YR"):
+        token_type, token_value = self.current()
+        
+        # Only parse if next token is a valid expression start
+        if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER") \
+        or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT", "SMOOSH", "FUNCTION_CALL"):
             self.parse_expr()
+            while self.match("YR"):
+                self.parse_expr()
     
     def parse_expr(self):
         token_type, token_value, *_ = self.current()
         
-        # Literal or variable
-        if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER"):
-            self.advance()
-        
-        # Arithmetic operation (SUM OF, DIFF OF, etc.)
-        elif token_type == "ARITHMETIC_OPERATOR" or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF"):
-            self.parse_operation()
-        
-        # Comparison (BOTH SAEM, DIFFRINT)
-        elif token_type == "COMPARISON_OPERATOR":
-            self.parse_comparison()
-        
-        # SMOOSH concatenation
-        elif token_type == "SMOOSH":
-            self.parse_smoosh()
-        
-        # Function call
-        elif token_type == "FUNCTION_CALL":
-            self.parse_function_call()
-                    
-        else:
-            raise ParserError(f"Unexpected token in expression: {token_type} {token_value}")
+        try:
+            # Literal or variable
+            if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE", "IDENTIFIER"):
+                self.advance()
+            
+            # Arithmetic operation (SUM OF, DIFF OF, etc.)
+            elif token_type == "ARITHMETIC_OPERATOR" or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF"):
+                self.parse_operation()
+            
+            # Comparison (BOTH SAEM, DIFFRINT)
+            elif token_type == "COMPARISON_OPERATOR":
+                self.parse_comparison()
+            
+            # SMOOSH concatenation
+            elif token_type == "SMOOSH":
+                self.parse_smoosh()
+            
+            # Function call
+            elif token_type == "FUNCTION_CALL":
+                self.parse_function_call()
+                        
+            else:
+                raise ParserError(f"Unexpected token in expression: {token_type} {token_value}")
 
+        except ParserError as e:
+            self.errors.append(str(e))
+            self.advance()  # Try to skip token and continue
+    '''
+    THIS NEEDS SOME FIXING:
+    '''
     def parse_operation(self):
         # <operation> ::= SUM OF <expr> AN <expr> (AN <expr>)*
         self.advance()  # consume the operator keyword (SUM OF, DIFF OF, etc.)
@@ -309,9 +357,21 @@ class Parser:
     # Literals
     # -------------------------
     def parse_literal(self):
-        token_type, _ = self.current()
+        token_type, token_value = self.current()
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE"):
             self.advance()
         else:
             raise ParserError(f"Expected literal, got {token_type}")
         
+    # ------------------------- 
+    # Helpers
+    # -------------------------
+    def check(self, ttype, value=None):
+        token_type, token_value = self.current()
+        return token_type == ttype and (value is None or token_value == value)
+    
+    def previous(self):
+        if self.pos > 0:
+            t = self.tokens[self.pos - 1]
+            return {"type": t[0], "value": t[1]}
+        return None
