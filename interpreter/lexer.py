@@ -31,13 +31,32 @@ token_specs = [
     ("LOGICAL_OPERATOR", r"BOTH OF|EITHER OF|WON OF|NOT|ANY|OF|ALL OF"),
     
     # CONTROL FLOW
-    ("CONTROL_FLOW", r"O RLY|YA RLY|MEBBE|NO WAI|OIC|WTF|OMG|OMGWTF|AWSUM THX|O NOES|PLZ|KTHNX|GTFO|FOUND YR"),
+    ("CONTROL_FLOW", r"O RLY?|YA RLY|MEBBE|NO WAI|OIC|WTF|OMG|OMGWTF|AWSUM THX|O NOES|PLZ|KTHNX|GTFO|FOUND YR"),
+    ("ORLY", r"O RLY\?"),
+    ("YARLY", r"YA RLY"),
+    ("MEBBE", r"MEBBE"),
+    ("NOWAI", r"NO WAI"),
+    ("OIC", r"OIC"),
+    
+    # SWITCH/CASE
+    ("WTF", r"WTF\?"),
+    ("OMG", r"OMG"),
+    ("OMGWTF", r"OMGWTF"),
     
     # LOOPING
-    ("LOOPING", r"IM IN YR|UPPIN|NERFIN|YR|TIL|WILE|IM OUTTA YR"),
+    ("LOOPING", r"\bIM IN YR\b|\bUPPIN\b|\bNERFIN\b|\bYR\b|\bTIL\b|\bWILE\b|\bIM OUTTA YR\b"),
+    ("IMINYR", r"IM IN YR"),
+    ("IMOUTTAYR", r"IM OUTTA YR"),
+    ("UPPIN", r"UPPIN"),
+    ("NERFIN", r"NERFIN"),
+    ("TIL", r"TIL"),
     
     # FUNCTION DEFINITION AND CALL
     ("FUNCTION_DEF_CALL", r"HOW IZ I|IF U SAY SO|I IZ|MKAY"),
+    ("HOWIZI", r"HOW IZ I"),
+    ("IIZ", r"I IZ"),
+    ("MKAY", r"MKAY"),
+    ("IFUSAYSO", r"IF U SAY SO"),
     
     # MULTIPLE PARAM SEPARATOR
     ("MULTI_PARAM_SEPARATOR", r"AN"),
@@ -65,9 +84,22 @@ token_specs = [
     # IDENTIFIER:   FUNCIDENT, LOOPIDENT, VARIDENT
     ("IDENTIFIER", r"[A-Za-z][A-Za-z0-9_]*"),
     
+    # RETURN / EXIT
+    ("RETURN_KEYWORD", r"FOUND"),
+    ("YR", r"YR"),
+    ("EXIT_KEYWORD", r"GTFO"),
+
+    # EXCEPTION HANDLING
+    ("PLZ", r"PLZ"),
+    ("AWSUMTHX", r"AWSUM THX"),
+    ("ONOES", r"O NOES"),
+    ("KTHX", r"KTHX"),
+    
     # OTHERS
     ("NEWLINE", r"\n"),
     ("WHITESPACE", r"[ \t\r]+"),
+    
+    
 ]
 
 # Build regex
