@@ -35,7 +35,7 @@ def print_tokens(tokens):
             print(f"{label} {value}")
 
 def main():
-    filename = "../lol_files/01_variables.lol"
+    filename = "../lol_files/05_bool.lol"
 
     # === READ FILE ===
     with open(filename, "r") as f:
@@ -47,27 +47,21 @@ def main():
     print_tokens(tokens)
     
     # === SYNTAX ANALYSIS ===
-    print("\n=== SYNTAX ANALYSIS ===")
-    try:
-        parser = Parser(tokens)
-        tree = parser.parse_program()   # This will raise ParserError if invalid
-        print("No syntax errors found. ✅")
-    except ParserError as e:
-        print("Syntax error:", e)
-        print("\nSemantic analysis skipped due to syntax errors.")
-        return
-    
-    # === PARSE TREE (using the NEW TreeParser) ===
-    print("\n=== PARSE TREE ===")
-    try:
-        # Re-run parsing with the tree builder
-        tp = TreeParser(tokens)
-        tree = tp.parse_program()
-        print(tree.pretty())
-    except ParserError as e:
-        print("Tree building error:", e)
-        return
-    
+    print("\n=== SYNTAX ANALYSIS / PARSE TREE ===")
+    tp = TreeParser(tokens)
+    tree = tp.parse_program()
+
+    if tp.errors:
+        print("Parsing completed with errors:")
+        for e in tp.errors:
+            print("-", e)
+    else:
+        print("Parsing completed successfully! ✅")
+
+    # Print parse tree anyway (useful to visualize partial AST)
+    print("\nParse Tree:")
+    print(tree.pretty())
+        
     # === SEMANTIC ANALYSIS ===
     print("\n=== SEMANTIC ANALYSIS ===")
     analyze_semantics(filename)
