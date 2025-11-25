@@ -1,8 +1,6 @@
 from lexer import tokenize, filter_tokens
 from parser import Parser, ParserError
 
-
-
 # --------------------------
 # Track variable information
 # --------------------------
@@ -135,7 +133,7 @@ def evaluate_expression(tokens, table, line_num, errors):
 # -----------------------------
 # Semantic Analysis
 # -----------------------------
-def analyze_semantics_from_code(code):
+def analyze_semantics(code):
     # -----------------------------
     # Syntax checking
     # -----------------------------

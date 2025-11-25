@@ -14,8 +14,10 @@ class TreeParser:
         self.tokens = tokens
         self.pos = 0
         self.errors = []  # Collect parsing errors
-
-    # helpers
+    
+    # -------------------------
+    # Helpers
+    # -------------------------
     def current(self):
         while self.pos < len(self.tokens) and self.tokens[self.pos][0].startswith("COMMENT"):
             self.pos += 1
@@ -24,9 +26,18 @@ class TreeParser:
             return t[0], t[1], t[2], t[3]  # type, value, line, col
         return None, None, None, None
 
-
     def advance(self):
         self.pos += 1
+
+    def check(self, ttype, value=None):
+        token_type, token_value, *_ = self.current()
+        return token_type == ttype and (value is None or token_value == value)
+    
+    def previous(self):
+        if self.pos > 0:
+            t = self.tokens[self.pos - 1]
+            return {"type": t[0], "value": t[1], 'line': t[2] if len(t) > 2 else None}
+        return None
 
     def match(self, ttype, value=None):
         token_type, token_value, *_ = self.current()
@@ -60,6 +71,19 @@ class TreeParser:
             return None, None
         return None, None
     
+    def peek_next_is_expr(self):
+        token_type, token_value = self.peek_next()
+        if token_type is None:
+            return False
+        return token_type in (
+            "INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE",
+            "IDENTIFIER", "MAEK", "ARITHMETIC_OPERATOR", "COMPARISON_OPERATOR",
+            "LOGICAL_OPERATOR", "SMOOSH", "FUNCTION_CALL", "IO"
+        ) or token_value in (
+            "SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "MOD OF",
+            "BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT"
+        )
+
     # -------------------------
     # Program Entry
     # -------------------------
@@ -215,11 +239,14 @@ class TreeParser:
     # PRINT ::= VISIBLE expr_list
     def parse_print(self):
         node = TreeNode("PRINT")
-        
+    
+        # VISIBLE keyword
         self.expect("OUTPUT_KEYWORD", "VISIBLE")
-        
         node.add(TreeNode("VISIBLE"))
-        node.add(self.parse_expr_list())
+        
+        # Parse a list of expressions
+        expr_list_node = self.parse_expr_list()
+        node.add(expr_list_node)
         
         return node
     
@@ -257,6 +284,7 @@ class TreeParser:
         # expr
         expr_node = self.parse_expr()
         node.add(expr_node)
+        
         return node
     
     # <return> ::= FOUND YR <expr>
@@ -286,10 +314,11 @@ class TreeParser:
     # <typecast> ::= MAEK <expr> A <type>
     def parse_typecast(self):
         node = TreeNode("TYPECAST")
+        
         token_type, token_value, *_ = self.current()
 
         if token_type == "IDENTIFIER" and self.peek_next()[0] == "IS_NOW_A":
-            # x IS NOW A TYPE
+            # Form: x IS NOW A TYPE
             var_token = self.expect("IDENTIFIER")
             node.add(TreeNode("VAR", var_token["value"], var_token.get('line')))
             self.expect("IS_NOW_A")
@@ -298,18 +327,16 @@ class TreeParser:
             return node
 
         elif token_type == "MAEK":
-            # MAEK <expr> A <type>
+            # Form: MAEK <expr> A <type>
             maek_token = self.expect("MAEK")
             node.add(TreeNode("MAEK", maek_token["value"], maek_token.get('line')))
 
-            # Parse the expression: allow IDENTIFIER, literals, or nested operations
+            # Expression: allow literals, identifiers, or nested expressions (including SMOOSH)
             expr_node = self.parse_expr()
             node.add(expr_node)
 
-            # Expect "A"
-            self.expect("A")
-
-            # Type literal
+            # Optional "A"
+            self.match("A")  # consume "A" if present, ignore result
             type_token = self.expect("TYPE_LITERAL")
             node.add(TreeNode("TYPE", type_token["value"], type_token.get('line')))
 
@@ -319,7 +346,6 @@ class TreeParser:
             self.errors.append(f"[pos {self.pos}] Invalid typecast start: {token_type} {token_value}")
             self.advance()
             return node
-
     
     # <conditional>  ::= O RLY? <linebreak> YA RLY <linebreak> <block>
     #               (MEBBE <expr> <linebreak> <block>)*
@@ -554,13 +580,41 @@ class TreeParser:
     # -------------------------
     def parse_expr_list(self):
         node = TreeNode("EXPR_LIST")
-        expr_node = self.parse_expr()
-        node.add(expr_node)
-        
-        while self.match("YR"):
-            expr_node = self.parse_expr()
+        first = True
+
+        while True:
+            token_type, token_value, *_ = self.current()
+
+            # Stop if definitely not an expression
+            if token_type in ("CODE_DELIMITER", "EOF"):
+                break
+
+            # Prevent infinite loop: stop on statement starters
+            if not first and token_type in ("OUTPUT_KEYWORD", "INPUT_KEYWORD", "VAR_DECLARATION", "FUNCTION_DEF"):
+                break
+            # If it's GIMMEH, treat it as an expression
+            if token_type == "IO" and token_value == "GIMMEH":
+                expr_node = self.parse_input()
+            else:
+                expr_node = self.parse_expr()
+
             node.add(expr_node)
-        
+            first = False  # update after first expression
+
+            # Continue if next token is a multi-param separator "AN"
+            if self.match("MULTI_PARAM_SEPARATOR", "AN"):
+                if not self.peek_next_is_expr():
+                    self.errors.append(f"Expected expression after AN at pos {self.pos}")
+                    break
+                continue
+
+            # Or continue if next token is another expression (no AN needed)
+            if self.peek_next_is_expr():
+                continue
+
+            # Otherwise, stop
+            break
+
         return node
 
     # EXPR
@@ -581,12 +635,12 @@ class TreeParser:
         elif token_type == "MAEK":
             return self.parse_typecast()
 
-        # Arithmetic operation (SUM OF, DIFF OF, etc.)
-        elif token_type == "ARITHMETIC_OPERATOR" or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "BIGGR OF", "SMALLR OF", "MOD OF"):
+        # Arithmetic operation 
+        elif token_type == "ARITHMETIC_OPERATOR" or token_value in ("SUM OF", "DIFF OF", "PRODUKT OF", "QUOSHUNT OF", "MOD OF"):
             return self.parse_operation()
         
-        # Comparison (BOTH SAEM, DIFFRINT)
-        elif token_type == "COMPARISON_OPERATOR":
+        # Comparison operation
+        elif token_type == "COMPARISON_OPERATOR" or token_value in ("BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT"):
             return self.parse_comparison()
         
         # Logical (BOTH OF, ANY OF, ALL OF, etc.)
@@ -613,62 +667,45 @@ class TreeParser:
             self.advance()
             return TreeNode("ERROR", token_value, getattr(self.current(), 'line', None))
         
+    # Arithmetic operation
     def parse_operation(self):
-        # Get operator token
         tok = self.expect("ARITHMETIC_OPERATOR")
-        token_type = tok["type"]
-        token_value = tok["value"]
-        line = tok.get('line')
+        node = TreeNode("OP", tok["value"], tok.get("line"))
 
-        # Create operation node
-        node = TreeNode("OP", token_value, line)
-        
-        # FIRST operand
-        left = self.parse_expr()
-        node.add(left)
-        
-        # Additional operands separated by AN
-        while self.match("MULTI_PARAM_SEPARATOR", "AN"):
-            right = self.parse_expr()
-            node.add(right)
-
-        # Expect AN
-        # self.current()[0] == "MULTI_PARAM_SEPARATOR":
-        #    self.expect("MULTI_PARAM_SEPARATOR")  # AN
-        #    right = self.parse_expr()
-        #    node.add(right)
-        #else:
-        #    raise ParserError(f"Expected AN in arithmetic operation: {token_type} {token_value}")
-
-        return node
-    
-    def parse_comparison(self):
-        # Get the comparison operator token
-        token_type, token_value, *_ = self.current()
-        line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
-        self.advance()
-        
-        # Create comparison node
-        node = TreeNode("COMPARISON", token_value, line)
-
-        # First operand
+        # Parse **any expression** as operands, including nested comparisons or operations
         node.add(self.parse_expr())
 
-        # Optional AN
         while self.match("MULTI_PARAM_SEPARATOR", "AN"):
             node.add(self.parse_expr())
-        '''
-        # Second operand (if valid)
-        token_type, token_value = self.current()
-        if token_type in (
-            "INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE",
-            "IDENTIFIER", "ARITHMETIC_OPERATOR", "COMPARISON_OPERATOR", "SMOOSH"
-        ):
-            second_expr = self.parse_expr()
-            node.add(second_expr)
-        '''
+
         return node
     
+    # Comparison operation
+    def parse_comparison(self):
+        token_type, token_value, *_ = self.current()
+
+        if token_type == "COMPARISON_OPERATOR" or token_value in ("BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT"):
+            tok = self.expect(token_type, token_value)
+            node = TreeNode("COMPARISON", tok["value"], tok.get("line"))
+
+            # First operand must always exist
+            node.add(self.parse_expr())
+
+            # Parse additional operands after "AN"
+            while self.match("MULTI_PARAM_SEPARATOR", "AN"):
+                if self.peek_next_is_expr():
+                    node.add(self.parse_expr())
+                else:
+                    # If next token after AN is missing or invalid, stop gracefully
+                    break
+
+            return node
+
+        self.errors.append(f"Unexpected token in comparison: {token_type} {token_value}")
+        self.advance()
+        return TreeNode("ERROR", token_value, getattr(self.current(), 'line', None))
+
+
     def parse_logical(self):
         token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
@@ -708,25 +745,24 @@ class TreeParser:
             return node
     
     # <smoosh> ::= SMOOSH <expr> (AN <expr>)*
-    def parse_smoosh(self):    
-        
+    def parse_smoosh(self):
         token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
-    
+
         # Consume SMOOSH
         self.expect("SMOOSH")
-        
+
         # Create SMOOSH node
         node = TreeNode("SMOOSH", token_value, line)
 
-        # First expression
-        first_expr = self.parse_expr()
-        node.add(first_expr)
+        # At least one expression
+        expr_node = self.parse_expr()
+        node.add(expr_node)
 
         # Additional expressions separated by AN
         while self.match("MULTI_PARAM_SEPARATOR", "AN"):
-            expr = self.parse_expr()
-            node.add(expr)
+            expr_node = self.parse_expr()
+            node.add(expr_node)
 
         return node
     
@@ -742,16 +778,3 @@ class TreeParser:
             return TreeNode("LITERAL", token_value, line)
         else:
             raise ParserError(f"Expected literal, got {token_type} ({token_value})")
-
-    # ------------------------- 
-    # Helpers
-    # -------------------------
-    def check(self, ttype, value=None):
-        token_type, token_value, *_ = self.current()
-        return token_type == ttype and (value is None or token_value == value)
-    
-    def previous(self):
-        if self.pos > 0:
-            t = self.tokens[self.pos - 1]
-            return {"type": t[0], "value": t[1], 'line': t[2] if len(t) > 2 else None}
-        return None
