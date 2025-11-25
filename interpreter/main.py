@@ -35,7 +35,7 @@ def print_tokens(tokens):
             print(f"{label} {value}")
 
 def main():
-    filename = "../lol_files/05_bool.lol"
+    filename = "../lol_files/10_functions.lol"
 
     # === READ FILE ===
     with open(filename, "r") as f:
