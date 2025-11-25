@@ -17,23 +17,26 @@ class TreeParser:
 
     # helpers
     def current(self):
+        while self.pos < len(self.tokens) and self.tokens[self.pos][0].startswith("COMMENT"):
+            self.pos += 1
         if self.pos < len(self.tokens):
             t = self.tokens[self.pos]
-            return t[0], t[1]
-        return None, None
+            return t[0], t[1], t[2], t[3]  # type, value, line, col
+        return None, None, None, None
+
 
     def advance(self):
         self.pos += 1
 
     def match(self, ttype, value=None):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         if token_type == ttype and (value is None or token_value == value):
             self.advance()
             return True
         return False
 
     def expect(self, ttype, value=None):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         if token_type != ttype or (value is not None and token_value != value):
             # Record error
             self.errors.append(
@@ -78,7 +81,7 @@ class TreeParser:
     def parse_statement_list(self):
         node = TreeNode("STMT_LIST")
         while True:
-            token_type, token_value = self.current()
+            token_type, token_value, *_ = self.current()
             
             # End of program/block
             if token_type in (None, "CODE_DELIMITER", "OIC", "IF U SAY SO",
@@ -105,16 +108,14 @@ class TreeParser:
 
     # STATEMENT
     def parse_statement(self):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
 
         # <print>
         if token_type == "OUTPUT_KEYWORD":
             return self.parse_print()
-        
+
         # <declaration>
         elif token_type == "VAR_DECLARATION":
-            
-            # Enforce WAZZUP-only rule:
             if not getattr(self, "in_wazzup", False):
                 self.errors.append(f"[pos {self.pos}] Variable declaration outside WAZZUP")
             return self.parse_declaration()
@@ -122,35 +123,48 @@ class TreeParser:
         # <identifier>
         elif token_type == "IDENTIFIER":
             next_type, next_value = self.peek_next()
-            
+
+            # Assignment
             if next_type == "VAR_ASSIGNMENT":
                 return self.parse_assignment()
-            
+
+            # Typecast: x IS NOW A TYPE
             elif next_type == "IS_NOW_A":
-                return self.parse_typecast()
-            
+                expr_node = self.parse_typecast()
+                node = TreeNode("EXPR_STMT")
+                node.add(expr_node)
+                return node
+
+            # Otherwise treat as expression
             else:
                 expr_node = self.parse_expr()
                 node = TreeNode("EXPR_STMT")
                 node.add(expr_node)
                 return node
-        
+
+        # <typecast> with MAEK
+        elif token_type == "MAEK":
+            expr_node = self.parse_typecast()
+            node = TreeNode("EXPR_STMT")
+            node.add(expr_node)
+            return node
+
         # <conditional>
         elif token_type == "CONTROL_FLOW" and token_value == "O RLY?":
             return self.parse_conditional()
-        
+
         # <loop>
         elif token_type == "LOOPING" and token_value == "IM IN YR":
             return self.parse_loop()
-            
+
         # <function_def>
         elif token_type == "FUNCTION_DEF_CALL" and token_value == "HOW IZ I":
             return self.parse_function_def()
-        
+
         # <function_call>
         elif token_type == "FUNCTION_CALL" or (token_type == "I" and token_value == "IZ"):
             return self.parse_function_call()
-        
+
         # Arithmetic operation line
         elif token_type == "ARITHMETIC_OPERATOR":
             expr = self.parse_expr()
@@ -161,38 +175,28 @@ class TreeParser:
         # <input>
         elif token_type == "IO" and token_value == "GIMMEH":
             return self.parse_input()
-            
+
         # <return>
         elif token_type == "RETURN" or (token_type == "FOUND" and token_value == "YR"):
             return self.parse_return()
-            
+
         # <exit>
         elif token_type in ("EXIT", "GTFO"):
             self.advance()
             return TreeNode("EXIT")
-                
-        # <typecast>
-        elif token_type == "MAEK" or (token_type == "IDENTIFIER" and self.peek_next()[0] == "IS_NOW_A"):
-            node = self.parse_typecast()
-            node = TreeNode("EXPR_STMT")
-            node.add(self.parse_typecast())
-            return node
-        
-        #elif token_type == "MAEK":
-        #    expr_node = self.parse_typecast()
-        #    node = TreeNode("EXPR_STMT")
-        #    node.add(expr_node)
-        #    return node
-        
-        # <exeception_handling>
+
+        # <exception_handling>
         elif token_type == "EXCEPTION" and token_value == "PLZ":
             return self.parse_exception_handling()
-        
+
         # Expression-only lines (EXPR_STMT)
-        elif token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "IDENTIFIER", "MAEK", "BOOL_TRUE", "BOOL_FALSE", "SMOOSH", "ARITHMETIC_OPERATOR"):
-            expr = self.parse_expr()
+        elif token_type in (
+            "INT_LITERAL", "FLOAT_LITERAL", "STRING", "IDENTIFIER",
+            "MAEK", "BOOL_TRUE", "BOOL_FALSE", "SMOOSH", "ARITHMETIC_OPERATOR"
+        ):
+            expr_node = self.parse_expr()
             node = TreeNode("EXPR_STMT")
-            node.add(expr)
+            node.add(expr_node)
             return node
 
         # Unknown / error
@@ -200,8 +204,9 @@ class TreeParser:
             self.errors.append(
                 f"Unknown statement starting with {token_type} {token_value} at position {self.pos}"
             )
-            self.advance()              # Skip token to try to continue parsing
-            return TreeNode("ERROR")    # Create placeholder node
+            self.advance()  # Skip token to continue parsing
+            return TreeNode("ERROR")
+
 
     # --------------------------
     # Specific Statement Parsers
@@ -281,37 +286,30 @@ class TreeParser:
     # <typecast> ::= MAEK <expr> A <type>
     def parse_typecast(self):
         node = TreeNode("TYPECAST")
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
 
-        # Case 1: x IS NOW A NUMBAR
-        if token_type == "IDENTIFIER":
+        if token_type == "IDENTIFIER" and self.peek_next()[0] == "IS_NOW_A":
+            # x IS NOW A TYPE
             var_token = self.expect("IDENTIFIER")
             node.add(TreeNode("VAR", var_token["value"], var_token.get('line')))
-            
-            if self.match("IS_NOW_A"):
-                # TYPE_LITERAL is required
-                type_token = self.expect("TYPE_LITERAL")
-                node.add(TreeNode("TYPE", type_token["value"], type_token.get('line')))
-                return node
-            else:
-                # recovery: we expected IS NOW A but didn't get it
-                self.errors.append(f"[pos {self.pos}] Expected IS NOW A after {var_token['value']}")
-                return node
+            self.expect("IS_NOW_A")
+            type_token = self.expect("TYPE_LITERAL")
+            node.add(TreeNode("TYPE", type_token["value"], type_token.get('line')))
+            return node
 
-        # Case 2: MAEK expr A TYPE
         elif token_type == "MAEK":
-            # consume MAEK
+            # MAEK <expr> A <type>
             maek_token = self.expect("MAEK")
             node.add(TreeNode("MAEK", maek_token["value"], maek_token.get('line')))
 
-            # parse the inner expression to be cast
+            # Parse the expression: allow IDENTIFIER, literals, or nested operations
             expr_node = self.parse_expr()
             node.add(expr_node)
-            
-            if self.current()[0] == "A":
-                self.expect("A")
 
-            # Type literal required
+            # Expect "A"
+            self.expect("A")
+
+            # Type literal
             type_token = self.expect("TYPE_LITERAL")
             node.add(TreeNode("TYPE", type_token["value"], type_token.get('line')))
 
@@ -320,8 +318,8 @@ class TreeParser:
         else:
             self.errors.append(f"[pos {self.pos}] Invalid typecast start: {token_type} {token_value}")
             self.advance()
-        
-        return node
+            return node
+
     
     # <conditional>  ::= O RLY? <linebreak> YA RLY <linebreak> <block>
     #               (MEBBE <expr> <linebreak> <block>)*
@@ -567,7 +565,7 @@ class TreeParser:
 
     # EXPR
     def parse_expr(self):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
 
         # Literal or variable
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE"):
@@ -646,7 +644,7 @@ class TreeParser:
     
     def parse_comparison(self):
         # Get the comparison operator token
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
         self.advance()
         
@@ -672,13 +670,13 @@ class TreeParser:
         return node
     
     def parse_logical(self):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
         
         # Combine ANY/ALL with OF if necessary
         if token_value in ("ANY", "ALL"):
             self.advance()
-            next_type, next_value = self.current()
+            next_type, next_value, *_ = self.current()
             if next_type == "LOGICAL_OPERATOR" and next_value == "OF":
                 token_value = f"{token_value} OF"
                 self.advance()
@@ -712,7 +710,7 @@ class TreeParser:
     # <smoosh> ::= SMOOSH <expr> (AN <expr>)*
     def parse_smoosh(self):    
         
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
     
         # Consume SMOOSH
@@ -736,7 +734,7 @@ class TreeParser:
     # Literals
     # -------------------------
     def parse_literal(self):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
         
         if token_type in ("INT_LITERAL", "FLOAT_LITERAL", "STRING", "BOOL_TRUE", "BOOL_FALSE"):
@@ -749,7 +747,7 @@ class TreeParser:
     # Helpers
     # -------------------------
     def check(self, ttype, value=None):
-        token_type, token_value = self.current()
+        token_type, token_value, *_ = self.current()
         return token_type == ttype and (value is None or token_value == value)
     
     def previous(self):
