@@ -59,18 +59,13 @@ class TreeParser:
         self.advance()
         return {"type": token_type, "value": token_value}
     
-    # Return the next token type and value without advancing
     def peek_next(self):
         if self.pos + 1 < len(self.tokens):
             t = self.tokens[self.pos + 1]
-            
-            # Allow either (type,value) or (type,value,line,col)
-            if isinstance(t, tuple):
-                if len(t) >= 2:
-                    return t[0], t[1]
-            return None, None
+            if isinstance(t, tuple) and len(t) >= 2:
+                return t[0], t[1]
         return None, None
-    
+
     def peek_next_is_expr(self):
         token_type, token_value = self.peek_next()
         if token_type is None:
@@ -190,7 +185,7 @@ class TreeParser:
             return self.parse_function_call()
 
         # Arithmetic operation line
-        elif token_type == "ARITHMETIC_OPERATOR":
+        elif token_type == "ARITHMETIC_OPERATOR, COMPARISON_OPERATOR":
             expr = self.parse_expr()
             node = TreeNode("EXPR_STMT")
             node.add(expr)
@@ -669,12 +664,10 @@ class TreeParser:
         
     # Arithmetic operation
     def parse_operation(self):
-        tok = self.expect("ARITHMETIC_OPERATOR")
-        node = TreeNode("OP", tok["value"], tok.get("line"))
+        tok = self.expect("ARITHMETIC_OPERATOR", self.current()[1])
+        node = TreeNode("OPERATION", tok["value"], tok.get("line"))
 
-        # Parse **any expression** as operands, including nested comparisons or operations
         node.add(self.parse_expr())
-
         while self.match("MULTI_PARAM_SEPARATOR", "AN"):
             node.add(self.parse_expr())
 
@@ -683,29 +676,25 @@ class TreeParser:
     # Comparison operation
     def parse_comparison(self):
         token_type, token_value, *_ = self.current()
-
-        if token_type == "COMPARISON_OPERATOR" or token_value in ("BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT"):
+        if token_type == "COMPARISON_OPERATOR" or token_value in (
+            "BIGGR OF", "SMALLR OF", "BOTH SAEM", "DIFFRINT"
+        ):
             tok = self.expect(token_type, token_value)
             node = TreeNode("COMPARISON", tok["value"], tok.get("line"))
 
-            # First operand must always exist
-            node.add(self.parse_expr())
+            node.add(self.parse_expr())  # first operand
 
-            # Parse additional operands after "AN"
             while self.match("MULTI_PARAM_SEPARATOR", "AN"):
-                if self.peek_next_is_expr():
-                    node.add(self.parse_expr())
-                else:
-                    # If next token after AN is missing or invalid, stop gracefully
-                    break
+                node.add(self.parse_expr())  # always consume
 
             return node
 
-        self.errors.append(f"Unexpected token in comparison: {token_type} {token_value}")
+        self.errors.append(
+            f"Unexpected token in comparison: {token_type} {token_value} at pos {self.pos}"
+        )
         self.advance()
         return TreeNode("ERROR", token_value, getattr(self.current(), 'line', None))
-
-
+        
     def parse_logical(self):
         token_type, token_value, *_ = self.current()
         line = self.tokens[self.pos][2] if len(self.tokens[self.pos]) > 2 else None
